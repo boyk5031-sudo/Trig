@@ -43,20 +43,8 @@ import com.trigger.feature.gameassistant.activation.RequiredAccess
         }
     }
     selected?.let { app ->
-        val accesses=activation.requiredAccess()
-        val root=activation.detect().mode==com.trigger.feature.gameassistant.activation.ActivationMode.ROOT
-        val shizuku=activation.detect().ready
-        val all=accesses.values.all { it } && (root || shizuku)
-        AlertDialog(onDismissRequest={selected=null}, title={Text("Pre-flight setup")}, text={ Column {
-            Text("Permissions and activation required before starting ${app.loadLabel(context.packageManager)}.")
-            RequiredAccess.entries.forEach { access -> Row(Modifier.fillMaxWidth().padding(vertical=3.dp), horizontalArrangement=Arrangement.SpaceBetween) { Text(access.name.replace('_',' ')); Text(if(accesses[access]==true) "Ready" else "Grant") } }
-            Text("Activation: ${if(root) "Root" else if(shizuku) "Shizuku" else "Not active"}")
-            if (!root && !shizuku) TextButton(onClick={activation.openDeveloperOptions()}) { Text("Developer options / wireless debugging") }
-            TextButton(onClick={activation.openOverlaySettings()}) { Text("Overlay access") }
-            TextButton(onClick={activation.openBatterySettings()}) { Text("Battery exemption") }
-            TextButton(onClick={activation.openDndSettings()}) { Text("Do Not Disturb access") }
-            TextButton(onClick={activation.openUsageSettings()}) { Text("Usage access") }
-            if (!accesses.getValue(RequiredAccess.MICROPHONE)) TextButton(onClick={mic.launch(Manifest.permission.RECORD_AUDIO)}) { Text("Microphone permission") }
-        } }, confirmButton={ TextButton(enabled=all,onClick={onLaunch(app,turbo); selected=null}) { Text("Launch") } }, dismissButton={TextButton(onClick={selected=null}) {Text("Cancel")}})
+        PermissionOnboardingBottomSheet(context, app.loadLabel(context.packageManager).toString(), activation, onDismiss={selected=null}) {
+            onLaunch(app,turbo); selected=null
+        }
     }
 }

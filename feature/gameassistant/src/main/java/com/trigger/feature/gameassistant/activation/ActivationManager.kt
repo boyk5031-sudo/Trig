@@ -23,7 +23,7 @@ enum class ActivationMode { ROOT, SHIZUKU, SHIZUKU_LEGACY, WIRELESS_DEBUGGING, U
 data class ActivationState(val mode: ActivationMode, val ready: Boolean, val message: String)
 enum class RequiredAccess { OVERLAY, BATTERY_EXEMPTION, DND, MICROPHONE, USAGE_STATS }
 
-class ActivationManager(private val context: Context, private val shizuku: ShizukuBridge? = null) {
+class ActivationManager(private val context: Context, private val shizuku: ShizukuBridge? = null, private val rootPaths:List<String> = listOf("/system/bin/su", "/system/xbin/su", "/sbin/su", "/system/sbin/su")) {
     fun detect(): ActivationState {
         if (rootAvailable()) return ActivationState(ActivationMode.ROOT, true, "Root shell available")
         val bridge = shizuku
@@ -38,7 +38,7 @@ class ActivationManager(private val context: Context, private val shizuku: Shizu
         return ActivationState(ActivationMode.WIRELESS_DEBUGGING, false, "Enable Shizuku, root, or wireless debugging")
     }
 
-    fun rootAvailable(): Boolean = listOf("/system/bin/su", "/system/xbin/su", "/sbin/su", "/system/sbin/su").any { File(it).canExecute() }
+    fun rootAvailable(): Boolean = rootPaths.any { File(it).canExecute() }
     fun usbConnected(): Boolean = try {
         context.registerReceiver(null, android.content.IntentFilter("android.hardware.usb.action.USB_STATE"))?.getBooleanExtra("connected", false) == true
     } catch (_: Exception) { false }
