@@ -7,12 +7,18 @@ import android.os.Process
 import android.view.InputEvent
 import java.lang.reflect.InvocationTargetException
 
+private fun resolveTrustedCallerUid(context: Context): Int = try {
+    context.applicationInfo.uid
+} catch (_: RuntimeException) {
+    -1
+}
+
 /** Instantiated by Shizuku as a user service (ADB-backed sessions normally run as UID 2000). */
 class ShizukuUserService private constructor(private val trustedCallerUid:Int) : IInputEventService.Stub() {
     companion object { private const val INJECT_INPUT_EVENT_MODE_ASYNC=0 }
     constructor():this(-1)
     /** Shizuku v13 prefers this constructor and supplies the calling application's context. */
-    constructor(context:Context):this(runCatching { context.applicationInfo.uid }.getOrDefault(-1))
+    constructor(context:Context):this(resolveTrustedCallerUid(context))
     @Volatile private var inputManager: Any? = null
     @Volatile private var injectMethod: java.lang.reflect.Method? = null
 

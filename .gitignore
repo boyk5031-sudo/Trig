@@ -1,0 +1,23 @@
+# Local Android SDK path
+local.properties
+
+# Gradle / Android build outputs
+.gradle/
+**/build/
+**/.cxx/
+**/captures/
+.externalNativeBuild/
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+
+# Release credentials and private artifacts
+*.jks
+*.keystore
+*.p12
+*.pem
+*.key
+*.properties.local
+release-artifacts/
+app/build/outputs/mapping/

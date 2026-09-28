@@ -1,6 +1,6 @@
 # Trigger
 
-Android multi-module game assistant and macro automation app. See [Architecture](docs/ARCHITECTURE.md), the [Operational Runbook](docs/RUNBOOK.md), and [Release Guide](docs/RELEASE.md) for system behavior, privacy boundaries, recovery procedures, and handoff requirements.
+Android multi-module game assistant and macro automation app. See [Android Studio setup](docs/ANDROID_STUDIO.md), [Architecture](docs/ARCHITECTURE.md), the [Operational Runbook](docs/RUNBOOK.md), and [Release Guide](docs/RELEASE.md) for development setup, system behavior, privacy boundaries, recovery procedures, and handoff requirements.
 
 ## Release validation
 

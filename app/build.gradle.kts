@@ -15,6 +15,10 @@ val signingKeyPassword=providers.gradleProperty("TRIGGER_RELEASE_KEY_PASSWORD").
 val releaseSigningConfigured=listOf(signingStore,signingPassword,signingAlias,signingKeyPassword).all { !it.isNullOrBlank() }
 
 android {
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
     namespace = "com.trigger.app"
     compileSdk = 35
     defaultConfig {
@@ -53,4 +57,15 @@ dependencies {
     implementation(libs.activity.compose); implementation(libs.core.ktx); implementation(libs.lifecycle.runtime.ktx); implementation(libs.lifecycle.runtime.compose); implementation(libs.lifecycle.viewmodel.compose)
     implementation(libs.shizuku.api); implementation(libs.shizuku.provider); implementation(libs.koin.android); implementation(libs.koin.compose); implementation(libs.navigation.compose); implementation(libs.work.runtime.ktx)
     androidTestImplementation(libs.androidx.test.core); androidTestImplementation(libs.androidx.test.runner); androidTestImplementation(libs.androidx.test.ext.junit)
+}
+
+
+kotlin {
+    jvmToolchain(17)
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+    }
+}
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+    kotlinOptions.jvmTarget = "17"
 }
