@@ -32,6 +32,7 @@ import com.trigger.core.ui.GlassCard
 import com.trigger.feature.gameassistant.activation.ActivationManager
 import com.trigger.feature.gameassistant.service.GameOverlayService
 import com.trigger.feature.macroeditor.model.MacroStep
+import com.trigger.feature.macroeditor.serialization.MacroSerializer
 import com.trigger.feature.macroeditor.ui.MacroEditorScreen
 import kotlinx.serialization.Serializable
 import kotlinx.coroutines.delay
@@ -59,11 +60,56 @@ import kotlinx.coroutines.delay
             composable<GameAssistantRoute> { GameLauncherScreen(context) { app,turbo -> serviceBinder.launch(app.packageName,app.loadLabel(context.packageManager).toString(),turbo); context.packageManager.getLaunchIntentForPackage(app.packageName)?.let { context.startActivity(it) } } }
             composable<MacroListRoute> {
                 var macros by remember { mutableStateOf(catalog.all()) }
+                var importError by remember { mutableStateOf<String?>(null) }
                 val currentEntry by navController.currentBackStackEntryAsState()
-                LaunchedEffect(currentEntry?.destination?.route) { if(currentEntry?.destination?.route?.contains("MacroListRoute")==true) macros=catalog.all() }
+                LaunchedEffect(currentEntry?.destination?.route) {
+                    if (currentEntry?.destination?.route?.contains("MacroListRoute") == true) macros = catalog.all()
+                }
                 Column(Modifier.fillMaxSize().padding(18.dp)) {
-                    Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) { Text("Macros",style=MaterialTheme.typography.headlineMedium); Button(onClick={val created=catalog.create();navController.navigate(MacroEditorRoute(created.id))}) { Text("New") } }
-                    LazyColumn(verticalArrangement=Arrangement.spacedBy(10.dp),contentPadding=PaddingValues(vertical=12.dp)) { items(macros,key={it.id}) { macro -> GlassCard(Modifier.fillMaxWidth().clickable { navController.navigate(MacroEditorRoute(macro.id)) }) { Text(macro.name,style=MaterialTheme.typography.titleMedium);Text("${macro.steps.size} steps · ${macro.packageName.ifBlank { "No target app" }}") } } }
+                    Text("Macros", style = MaterialTheme.typography.headlineMedium)
+                    Row(
+                        Modifier.fillMaxWidth().padding(top = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(onClick = {
+                            importError = null
+                            runCatching {
+                                val template = context.assets.open("macros/free_fire_launch.json")
+                                    .bufferedReader().use { it.readText() }
+                                MacroSerializer.decode(template)
+                            }.onSuccess { macro ->
+                                catalog.save(macro)
+                                macros = catalog.all()
+                                navController.navigate(MacroEditorRoute(macro.id))
+                            }.onFailure { error ->
+                                importError = "Could not import Free Fire macro: ${error.message ?: "invalid template"}"
+                            }
+                        }) {
+                            Text("Import Free Fire")
+                        }
+                        Button(onClick = {
+                            val created = catalog.create()
+                            macros = catalog.all()
+                            navController.navigate(MacroEditorRoute(created.id))
+                        }) {
+                            Text("New macro")
+                        }
+                    }
+                    importError?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 8.dp)) }
+                    LazyColumn(
+                        Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        contentPadding = PaddingValues(vertical = 12.dp)
+                    ) {
+                        items(macros, key = { it.id }) { macro ->
+                            GlassCard(Modifier.fillMaxWidth().clickable {
+                                navController.navigate(MacroEditorRoute(macro.id))
+                            }) {
+                                Text(macro.name, style = MaterialTheme.typography.titleMedium)
+                                Text("${macro.steps.size} steps · ${macro.packageName.ifBlank { "No target app" }}")
+                            }
+                        }
+                    }
                 }
             }
             composable<MacroEditorRoute> { entry ->

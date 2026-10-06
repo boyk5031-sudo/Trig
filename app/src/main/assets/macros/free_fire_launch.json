@@ -1,0 +1,13 @@
+{
+  "id": "preset-free-fire-launch",
+  "name": "Free Fire Launch",
+  "packageName": "com.freefireth",
+  "steps": [
+    {
+      "type": "launch_app",
+      "targetPackage": "com.freefireth"
+    }
+  ],
+  "repeatCount": 1,
+  "enabled": true
+}
