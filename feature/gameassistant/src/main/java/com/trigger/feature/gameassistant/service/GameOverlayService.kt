@@ -8,6 +8,7 @@ import android.content.Intent
 import android.graphics.PixelFormat
 import android.os.Build
 import android.os.IBinder
+import android.content.pm.ServiceInfo
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
@@ -17,6 +18,10 @@ import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.platform.setContent
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.savedstate.SavedStateRegistry
+import androidx.savedstate.SavedStateRegistryController
+import androidx.savedstate.SavedStateRegistryOwner
+import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.trigger.feature.gameassistant.hud.CrosshairOverlayView
 import com.trigger.feature.gameassistant.ui.GameAssistantOverlayUI
 import com.trigger.feature.gameassistant.util.GameDndController
@@ -62,27 +67,64 @@ class GameOverlayService : LifecycleService() {
     private var hud: CrosshairOverlayView? = null
     private val expanded = AtomicBoolean(false)
     private var macro: TriggerMacroController? = null
+    private lateinit var composeSavedStateOwner: SavedStateRegistryOwner
+
+    private inner class ServiceSavedStateOwner : SavedStateRegistryOwner {
+        private val controller = SavedStateRegistryController.create(this)
+
+        override val lifecycle
+            get() = this@GameOverlayService.lifecycle
+        override val savedStateRegistry: SavedStateRegistry
+            get() = controller.savedStateRegistry
+
+        init {
+            controller.performAttach()
+            controller.performRestore(null)
+        }
+    }
 
     override fun onCreate() {
+        // Create/attach the registry while LifecycleService is still INITIALIZED. ComposeView
+        // requires both lifecycle and saved-state owners when it is attached to WindowManager.
+        composeSavedStateOwner = ServiceSavedStateOwner()
         super.onCreate()
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         dndController = GameDndController(this)
         createNotificationChannel()
-        startForeground(NOTIFICATION_ID, buildNotification())
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
         if (intent?.action == ACTION_STOP) {
-            stopSelf()
+            stopSelf(startId)
             return START_NOT_STICKY
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !android.provider.Settings.canDrawOverlays(this)) {
-            stopSelf()
+            stopSelf(startId)
+            return START_NOT_STICKY
+        }
+        // Promote only for real work. Starting the service with ACTION_STOP must not start a
+        // foreground service (which can crash when the app is in the background on Android 12+).
+        try {
+            if (Build.VERSION.SDK_INT >= 34) {
+                startForeground(
+                    NOTIFICATION_ID,
+                    buildNotification(),
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+                )
+            } else {
+                startForeground(NOTIFICATION_ID, buildNotification())
+            }
+        } catch (_: SecurityException) {
+            stopSelf(startId)
+            return START_NOT_STICKY
+        } catch (_: RuntimeException) {
+            // Covers foreground-service start restrictions/type errors on Android 12+.
+            stopSelf(startId)
             return START_NOT_STICKY
         }
         if (!showDock() || !showHud()) {
-            stopSelf()
+            stopSelf(startId)
             return START_NOT_STICKY
         }
         isRunning = true
@@ -94,8 +136,14 @@ class GameOverlayService : LifecycleService() {
             )
             ACTION_SET_DND -> {
                 val enabled = intent.getBooleanExtra(EXTRA_DND_ENABLED, false)
-                dndEnabled = if (enabled) dndController.enable() else {
-                    dndController.restore()
+                dndEnabled = try {
+                    if (enabled) dndController.enable() else {
+                        dndController.restore()
+                        false
+                    }
+                } catch (_: SecurityException) {
+                    false
+                } catch (_: IllegalStateException) {
                     false
                 }
             }
@@ -120,6 +168,7 @@ class GameOverlayService : LifecycleService() {
         // A Service has no Activity decor view. Explicitly provide the LifecycleOwner so ComposeView
         // can create/dispose its composition safely when attached directly to WindowManager.
         setViewTreeLifecycleOwner(this@GameOverlayService)
+        setViewTreeSavedStateRegistryOwner(composeSavedStateOwner)
         setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
         setContent(content)
     }
@@ -195,7 +244,8 @@ class GameOverlayService : LifecycleService() {
         false
     } catch (_: WindowManager.BadTokenException) {
         false
-    } catch (_: IllegalStateException) {
+    } catch (_: RuntimeException) {
+        // WindowManager can reject stale tokens or unavailable displays during teardown.
         false
     }
 
@@ -203,10 +253,8 @@ class GameOverlayService : LifecycleService() {
         if (view == null) return
         try {
             windowManager.removeView(view)
-        } catch (_: IllegalArgumentException) {
-            // Window already detached by WindowManager during process/service teardown.
-        } catch (_: IllegalStateException) {
-            // WindowManager is shutting down; teardown must remain idempotent.
+        } catch (_: RuntimeException) {
+            // Window already detached or WindowManager is shutting down; teardown stays idempotent.
         }
     }
 

@@ -48,7 +48,19 @@ class DashboardViewModel(application:Application):AndroidViewModel(application) 
         val dnd=if(Build.VERSION.SDK_INT>=23 && nm.isNotificationPolicyAccessGranted) nm.currentInterruptionFilter!=android.app.NotificationManager.INTERRUPTION_FILTER_ALL else false
         mutable.value=mutable.value.copy(activationMode=activationState.mode,activationReady=activationState.ready,overlayRunning=GameOverlayService.isRunning,autoFire=GameOverlayService.autoFireEnabled,dnd=dnd,ramUsedMb=used,ramTotalMb=total,scheduleCount=schedules.all().count { it.enabled })
     }
-    fun toggleOverlay(enabled:Boolean) { if(enabled && Build.VERSION.SDK_INT>=23 && !android.provider.Settings.canDrawOverlays(app)) { activation.openOverlaySettings(); return }; if(enabled) startOverlayCommand(Intent(app,GameOverlayService::class.java).setAction(GameOverlayService.ACTION_START)) else app.startService(Intent(app,GameOverlayService::class.java).setAction(GameOverlayService.ACTION_STOP)); mutable.value=mutable.value.copy(overlayRunning=enabled) }
+    fun toggleOverlay(enabled:Boolean) {
+        if (enabled && Build.VERSION.SDK_INT >= 23 && !android.provider.Settings.canDrawOverlays(app)) {
+            activation.openOverlaySettings()
+            return
+        }
+        if (enabled) {
+            startOverlayCommand(Intent(app, GameOverlayService::class.java).setAction(GameOverlayService.ACTION_START))
+        } else {
+            // stopService avoids creating a fresh background service just to deliver ACTION_STOP.
+            app.stopService(Intent(app, GameOverlayService::class.java))
+        }
+        mutable.value = mutable.value.copy(overlayRunning = enabled)
+    }
     fun toggleAutoFire(enabled:Boolean) { if(enabled && Build.VERSION.SDK_INT>=23 && !android.provider.Settings.canDrawOverlays(app)) { activation.openOverlaySettings(); return }; startOverlayCommand(Intent(app,GameOverlayService::class.java).setAction(GameOverlayService.ACTION_SET_AUTO_FIRE).putExtra(GameOverlayService.EXTRA_AUTO_FIRE_ENABLED,enabled)); mutable.value=mutable.value.copy(autoFire=enabled) }
     fun toggleDnd(enabled:Boolean) { if(enabled && Build.VERSION.SDK_INT>=23 && !android.provider.Settings.canDrawOverlays(app)) { activation.openOverlaySettings(); return }; startOverlayCommand(Intent(app,GameOverlayService::class.java).setAction(GameOverlayService.ACTION_SET_DND).putExtra(GameOverlayService.EXTRA_DND_ENABLED,enabled)); mutable.value=mutable.value.copy(dnd=enabled) }
     private fun startOverlayCommand(intent:Intent) { if(Build.VERSION.SDK_INT>=26) app.startForegroundService(intent) else app.startService(intent) }

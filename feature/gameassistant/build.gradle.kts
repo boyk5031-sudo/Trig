@@ -49,6 +49,7 @@ dependencies {
     implementation(libs.activity.compose)
     implementation(libs.core.ktx)
     implementation(libs.lifecycle.service)
+    implementation("androidx.savedstate:savedstate-ktx:1.2.1")
 
     testImplementation(libs.junit)
     testImplementation(libs.robolectric)
