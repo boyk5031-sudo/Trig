@@ -21,3 +21,17 @@ Never commit keystore files or signing secrets. Version values can be overridden
 - `:baselineprofile:connectedBenchmarkAndroidTest` captures the dashboard and navigation startup profile on a benchmark device.
 
 The Shizuku user service validates that it is running as shell/root and restricts Binder callers to the app UID provided by Shizuku. User-service events are accepted only as `MotionEvent`s in asynchronous injection mode. The execution monitor writes diagnostics only through Android's user-selected Storage Access Framework document picker.
+
+## Gradle wrapper
+
+The complete Gradle 8.9 wrapper is included (`gradlew`, `gradlew.bat`, and
+`gradle/wrapper/gradle-wrapper.jar`). Install JDK 17 and Android SDK Platform 35,
+then configure `JAVA_HOME` and your SDK location before building:
+
+```sh
+./gradlew :app:assembleDebug
+```
+
+On Windows, use `gradlew.bat :app:assembleDebug`. The wrapper downloads Gradle
+on first use and verifies its SHA-256 checksum. Do not commit SDK paths, signing
+credentials, or Gradle/build caches.

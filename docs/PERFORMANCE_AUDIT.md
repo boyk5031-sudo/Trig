@@ -6,7 +6,9 @@ These are source-confirmed defects and targeted fixes, **not measured speedups**
 The device-wide cause of the reported lag is still unconfirmed: no device model,
 Android version, APK build type, Logcat, CPU trace or heap capture was supplied.
 No APK was produced in this environment. The requested Gradle test/build command
-failed before compilation because `./gradlew` is missing. There is also no Java,
+originally failed before compilation because `./gradlew` was missing.
+The Gradle 8.9 wrapper has since been restored and its JAR checksum verified;
+`./gradlew --version` now reaches the launcher but stops because Java is missing. There is also no Java,
 system Gradle, Android SDK, adb, emulator, or Android Studio Profiler installed.
 `git diff --check` passes. New regression tests have been written but not run.
 
@@ -55,14 +57,13 @@ remain functional; only hidden UI observation is suspended. JVM targets remain 1
 
 ## Build on an Android development machine
 
-Install JDK 17, Android SDK Platform 35/build tools and Gradle 8.9 (the version
-pinned in gradle/wrapper/gradle-wrapper.properties). Configure ANDROID_HOME or
-local.properties. This checkout lacks gradlew, gradlew.bat and the wrapper JAR;
-restore the trusted wrapper files or run the installed Gradle directly:
+Install JDK 17 and Android SDK Platform 35/build tools. Configure JAVA_HOME and
+ANDROID_HOME or local.properties. The checked-in wrapper downloads Gradle 8.9
+and verifies the distribution checksum. No system Gradle installation is needed:
 
 ```sh
-gradle :automation:engine:testDebugUnitTest :feature:gameassistant:testDebugUnitTest
-gradle :app:lintDebug :app:assembleDebug
+./gradlew :automation:engine:testDebugUnitTest :feature:gameassistant:testDebugUnitTest
+./gradlew :app:lintDebug :app:assembleDebug
 ```
 
 New `ResourceLifecycleTest` checks owned drag-thread shutdown, no orphan job after
