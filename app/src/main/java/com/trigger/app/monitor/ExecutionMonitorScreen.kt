@@ -16,10 +16,14 @@ import com.trigger.core.ui.GlassCard
 import com.trigger.automation.engine.MacroRunStatus
 import java.text.DateFormat
 import java.util.Date
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 @Composable fun ExecutionMonitorScreen(vm:ExecutionMonitorViewModel= viewModel()) {
     val state by vm.state.collectAsStateWithLifecycle(); val context=LocalContext.current
-    val createFile=rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri -> if(uri!=null) runCatching { context.contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { it.write(vm.exportJson()) } } }
+    val scope = rememberCoroutineScope()
+    val timeFormat = remember { DateFormat.getTimeInstance() }
+    val createFile=rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri -> if(uri!=null) scope.launch(Dispatchers.IO) { runCatching { context.contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { it.write(vm.exportJson()) } } } }
     val active=state.execution.status==MacroRunStatus.RUNNING || state.execution.status==MacroRunStatus.PAUSED
     Column(Modifier.fillMaxSize().padding(16.dp)) {
         Text("Execution monitor",style=MaterialTheme.typography.headlineMedium)
@@ -32,8 +36,8 @@ import java.util.Date
         Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) { Text("Execution logs",style=MaterialTheme.typography.titleLarge); TextButton(onClick={createFile.launch("trigger-execution-logs.json")}) { Text("Export JSON") } }
         Row(horizontalArrangement=Arrangement.spacedBy(6.dp)) { LogFilter.entries.forEach { filter -> FilterChip(selected=filter==state.filter,onClick={vm.setFilter(filter)},label={Text(filter.name)}) } }
         LazyColumn(Modifier.fillMaxSize(),verticalArrangement=Arrangement.spacedBy(8.dp),contentPadding=PaddingValues(vertical=8.dp)) {
-            items(state.logs.reversed(),key={"${it.timestampMs}_${it.stepIndex}_${it.phase}"}) { entry -> GlassCard(Modifier.fillMaxWidth()) {
-                Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) { Text(entry.phase,style=MaterialTheme.typography.labelLarge,color=when { entry.failureReason!=null -> MaterialTheme.colorScheme.error; entry.phase=="COMPLETE" || entry.phase=="STEP_END" -> MaterialTheme.colorScheme.tertiary; else -> MaterialTheme.colorScheme.primary }); Text(DateFormat.getTimeInstance().format(Date(entry.timestampMs)),style=MaterialTheme.typography.labelSmall) }
+            items(state.logs.asReversed()) { entry -> GlassCard(Modifier.fillMaxWidth()) {
+                Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) { Text(entry.phase,style=MaterialTheme.typography.labelLarge,color=when { entry.failureReason!=null -> MaterialTheme.colorScheme.error; entry.phase=="COMPLETE" || entry.phase=="STEP_END" -> MaterialTheme.colorScheme.tertiary; else -> MaterialTheme.colorScheme.primary }); Text(timeFormat.format(Date(entry.timestampMs)),style=MaterialTheme.typography.labelSmall) }
                 Text("${entry.macroId}${entry.stepIndex?.let { " · step ${it+1}" } ?: ""}")
                 entry.message?.let { Text(it,style=MaterialTheme.typography.bodySmall) }; entry.durationMs?.let { Text("${it} ms",style=MaterialTheme.typography.labelSmall) }
             } }

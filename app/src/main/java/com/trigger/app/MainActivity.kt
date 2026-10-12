@@ -9,7 +9,8 @@ import com.trigger.core.ui.TriggerTheme
 
 class MainActivity : ComponentActivity() {
     private lateinit var services:GameServiceBinder
-    override fun onCreate(savedInstanceState:Bundle?) { super.onCreate(savedInstanceState); services=GameServiceBinder(this); services.prepareActivation()
+    override fun onCreate(savedInstanceState:Bundle?) { super.onCreate(savedInstanceState); services=GameServiceBinder(this)
         setContent { TriggerTheme { TriggerNavGraph(services) } }
     }
+    override fun onDestroy() { services.releaseIfIdle(); super.onDestroy() }
 }

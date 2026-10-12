@@ -10,6 +10,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
@@ -17,8 +21,10 @@ import org.json.JSONObject
 enum class LogFilter { ALL, SUCCESS, ERROR, WARNING }
 data class ExecutionMonitorState(val execution:MacroExecutionState=MacroExecutionState(),val logs:List<ExecutionLogEntry> = emptyList(),val filter:LogFilter=LogFilter.ALL)
 class ExecutionMonitorViewModel(application:Application):AndroidViewModel(application) {
-    private val filter=MutableStateFlow(LogFilter.ALL); private val mutable=MutableStateFlow(ExecutionMonitorState()); val state:StateFlow<ExecutionMonitorState> = mutable.asStateFlow()
-    init { viewModelScope.launch { combine(ExecutionRuntime.state,ExecutionRuntime.logs,filter) { execution,logs,selection -> ExecutionMonitorState(execution,logs.filter { matches(it,selection) },selection) }.collect { mutable.value=it } } }
+    private val filter=MutableStateFlow(LogFilter.ALL)
+    val state: StateFlow<ExecutionMonitorState> = combine(ExecutionRuntime.state,ExecutionRuntime.logs,filter) { execution,logs,selection ->
+        ExecutionMonitorState(execution,if(selection==LogFilter.ALL) logs else logs.filter { matches(it,selection) },selection)
+    }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(0), ExecutionMonitorState())
     fun setFilter(value:LogFilter) { filter.value=value }
     fun stopExecution() { ExecutionRuntime.cancel() }
     fun clearLogs() { ExecutionRuntime.clearLogs() }

@@ -7,7 +7,7 @@ import com.trigger.automation.engine.TriggerEngine
 import com.trigger.feature.gameassistant.service.TouchDispatcher
 
 /** Converts View-local input locations to physical pixels before dispatch through TriggerEngine. */
-class GameAssistantTouchBridgeImpl(context: Context, private val engine: TriggerEngine) : TouchDispatcher {
+class GameAssistantTouchBridgeImpl(context: Context, private val engine: TriggerEngine, private val release: () -> Unit = {}) : TouchDispatcher {
     private val transformer = CoordinateTransformer(context.applicationContext)
     @Volatile private var lastX = 0; @Volatile private var lastY = 0
     fun tapFromView(view: View, x: Float, y: Float): Boolean {
@@ -16,4 +16,5 @@ class GameAssistantTouchBridgeImpl(context: Context, private val engine: Trigger
     override fun tap(x: Float, y: Float) { lastX=x.toInt(); lastY=y.toInt(); engine.tap(lastX,lastY) }
     override fun startHold(x: Float, y: Float) { lastX=x.toInt(); lastY=y.toInt(); engine.down(lastX,lastY) }
     override fun stop() { engine.stop(lastX,lastY) }
+    override fun close() { stop(); release() }
 }

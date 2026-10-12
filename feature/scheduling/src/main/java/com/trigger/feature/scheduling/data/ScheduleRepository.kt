@@ -18,7 +18,7 @@ import java.util.concurrent.TimeUnit
 class ScheduleRepository(context:Context) {
     private val app=context.applicationContext
     private val prefs=app.getSharedPreferences("macro_schedules",Context.MODE_PRIVATE)
-    private val wm=WorkManager.getInstance(app)
+    private val wm by lazy { WorkManager.getInstance(app) }
     private val json=Json { ignoreUnknownKeys=true }
     @Synchronized fun all():List<MacroSchedule> = try { json.decodeFromString(ListSerializer(MacroSchedule.serializer()),prefs.getString(KEY,"[]") ?: "[]") } catch (_:Exception) { emptyList() }
     @Synchronized fun save(schedule:MacroSchedule):MacroSchedule {

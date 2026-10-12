@@ -21,8 +21,10 @@ object PcmPitchShifter {
 
 /** Audio capture and playback run on a dedicated audio-priority thread, never the UI thread. */
 class FemaleVoiceDSP(private val sampleRate:Int=48000,private val pitchFactor:Float=1.42f):AutoCloseable {
-    private val running=AtomicBoolean(false); private var worker:Thread?=null
-    fun start() { if(!running.compareAndSet(false,true)) return; worker=Thread({ Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO);runPipeline() },"trigger-voice-dsp").also { it.start() } }
+    private val running=AtomicBoolean(false); @Volatile private var worker:Thread?=null
+    @Volatile private var activeInput: AudioRecord? = null
+    @Volatile private var activeOutput: AudioTrack? = null
+    @Synchronized fun start() { if(worker?.isAlive == true || !running.compareAndSet(false,true)) return; worker=Thread({ Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO);runPipeline() },"trigger-voice-dsp").also { it.start() } }
     private fun runPipeline() {
         val minIn=AudioRecord.getMinBufferSize(sampleRate,AudioFormat.CHANNEL_IN_MONO,AudioFormat.ENCODING_PCM_16BIT).coerceAtLeast(sampleRate/50*2)
         val minOut=AudioTrack.getMinBufferSize(sampleRate,AudioFormat.CHANNEL_OUT_MONO,AudioFormat.ENCODING_PCM_16BIT).coerceAtLeast(minIn)
@@ -30,10 +32,18 @@ class FemaleVoiceDSP(private val sampleRate:Int=48000,private val pitchFactor:Fl
         try {
             input=AudioRecord(MediaRecorder.AudioSource.VOICE_RECOGNITION,sampleRate,AudioFormat.CHANNEL_IN_MONO,AudioFormat.ENCODING_PCM_16BIT,minIn)
             output=AudioTrack.Builder().setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build()).setAudioFormat(AudioFormat.Builder().setSampleRate(sampleRate).setEncoding(AudioFormat.ENCODING_PCM_16BIT).setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build()).setBufferSizeInBytes(minOut).setTransferMode(AudioTrack.MODE_STREAM).build()
+            activeInput=input; activeOutput=output
+            if (!running.get()) return
             input.startRecording();output.play();val frame=ShortArray(sampleRate/50);val transformed=ShortArray(frame.size)
-            while(running.get()) { val count=input.read(frame,0,frame.size,AudioRecord.READ_BLOCKING);if(count<=0)continue;PcmPitchShifter.shift(frame,count,pitchFactor.coerceIn(.7f,2f),transformed);output.write(transformed,0,count,AudioTrack.WRITE_BLOCKING) }
+            while(running.get()) { val count=input.read(frame,0,frame.size,AudioRecord.READ_BLOCKING);if(count<=0)break;PcmPitchShifter.shift(frame,count,pitchFactor.coerceIn(.7f,2f),transformed);if(output.write(transformed,0,count,AudioTrack.WRITE_BLOCKING)<0) break }
         } catch (_:SecurityException) { running.set(false) } catch (_:IllegalStateException) { running.set(false) }
-        finally { try { input?.stop() } catch (_:Exception) {};input?.release();try { output?.stop() } catch (_:Exception) {};output?.release() }
+        finally { running.set(false); activeInput=null; activeOutput=null; try { input?.stop() } catch (_:Exception) {};input?.release();try { output?.stop() } catch (_:Exception) {};output?.release() }
     }
-    override fun close() { running.set(false);worker?.interrupt();worker?.join(500);worker=null }
+    @Synchronized override fun close() {
+        running.set(false)
+        // Unblock native I/O without joining an audio worker on the UI thread.
+        try { activeInput?.stop() } catch (_: IllegalStateException) { }
+        try { activeOutput?.pause() } catch (_: IllegalStateException) { }
+        worker?.interrupt()
+    }
 }

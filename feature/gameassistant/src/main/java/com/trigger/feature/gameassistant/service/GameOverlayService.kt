@@ -15,7 +15,6 @@ import android.view.WindowManager
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
-import androidx.compose.ui.platform.setContent
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.savedstate.SavedStateRegistry
@@ -28,10 +27,11 @@ import com.trigger.feature.gameassistant.util.GameDndController
 import com.trigger.feature.gameassistant.util.TriggerMacroController
 import java.util.concurrent.atomic.AtomicBoolean
 
-interface TouchDispatcher {
+interface TouchDispatcher : AutoCloseable {
     fun tap(x: Float, y: Float)
     fun startHold(x: Float, y: Float)
     fun stop()
+    override fun close() { stop() }
 }
 
 class GameOverlayService : LifecycleService() {
@@ -282,6 +282,8 @@ class GameOverlayService : LifecycleService() {
         }
         macro?.close()
         macro = null
+        touchDispatcher?.close()
+        touchDispatcher = null
         removeOverlay(panel)
         removeOverlay(dock)
         removeOverlay(hud)

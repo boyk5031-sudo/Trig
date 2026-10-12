@@ -15,6 +15,9 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.yield
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -42,12 +45,13 @@ class MacroExecutionEngine(
     @Synchronized fun executeMacro(macro: Macro, scope: CoroutineScope): Job {
         activeJob?.cancel()
         pauseGate=null
-        val run=scope.launch(SupervisorJob(scope.coroutineContext[Job]) + Dispatchers.Default) {
+        val run=scope.launch(Dispatchers.Default) {
             val started=System.currentTimeMillis()
             setState(MacroExecutionState(macro.id,MacroRunStatus.RUNNING,-1,macro.steps.size,started))
             log.record(ExecutionLogEntry(started,macro.id,null,"START",message="Macro started"))
             try {
                 repeat(macro.repeatCount.coerceAtLeast(1)) { repeatIndex ->
+                    yield() // Empty/zero-delay repeats must remain cancellable and share CPU.
                     var skipNext=false
                     for ((index,step) in macro.steps.withIndex()) {
                         awaitResume()
@@ -98,7 +102,7 @@ class MacroExecutionEngine(
     }
     @Synchronized fun cancel() { pauseGate?.complete(Unit); pauseGate=null; activeJob?.cancel() }
 
-    private suspend fun awaitResume() { pauseGate?.await() }
+    private suspend fun awaitResume() { currentCoroutineContext().ensureActive(); pauseGate?.await() }
     private suspend fun executeStep(step: MacroStep) {
         when(step) {
             is MacroStep.TapStep -> {

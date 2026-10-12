@@ -1,5 +1,7 @@
 package com.trigger.app.launcher
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import android.Manifest
 import android.content.Context
 import android.content.Intent
@@ -23,23 +25,27 @@ import com.trigger.app.bridge.SystemActivationBridgeImpl
 import com.trigger.feature.gameassistant.activation.ActivationManager
 import com.trigger.feature.gameassistant.activation.RequiredAccess
 
+private data class GameEntry(val info: ApplicationInfo, val label: String)
+
 @Composable fun GameLauncherScreen(context: Context, onLaunch: (ApplicationInfo, Boolean) -> Unit) {
-    var apps by remember { mutableStateOf(emptyList<ApplicationInfo>()) }; var selected by remember { mutableStateOf<ApplicationInfo?>(null) }; var turbo by remember { mutableStateOf(true) }; var refresh by remember { mutableIntStateOf(0) }
+    var apps by remember { mutableStateOf(emptyList<GameEntry>()) }; var selected by remember { mutableStateOf<ApplicationInfo?>(null) }; var turbo by remember { mutableStateOf(true) }; var refresh by remember { mutableIntStateOf(0) }
     val activation = remember { ActivationManager(context, SystemActivationBridgeImpl(context)) }
     val mic = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { refresh++ }
     LaunchedEffect(refresh) {
+        apps = withContext(Dispatchers.IO) {
         val pm=context.packageManager; val intent=Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
         @Suppress("DEPRECATION") val resolves=pm.queryIntentActivities(intent,0)
-        apps=resolves.mapNotNull { it.activityInfo?.applicationInfo }.distinctBy { it.packageName }.filter { ai ->
+        resolves.mapNotNull { it.activityInfo?.applicationInfo }.distinctBy { it.packageName }.filter { ai ->
             val game=(ai.flags and ApplicationInfo.FLAG_IS_GAME) != 0
             game || ai.category == ApplicationInfo.CATEGORY_GAME
-        }.sortedBy { it.loadLabel(pm).toString().lowercase() }
+        }.map { GameEntry(it, it.loadLabel(pm).toString()) }.sortedBy { it.label.lowercase() }
+        }
     }
     Column(Modifier.fillMaxSize().padding(20.dp)) {
         Text("Game Turbo", style=MaterialTheme.typography.headlineMedium); Text("Choose a game to configure before launch", modifier=Modifier.padding(bottom=12.dp))
         Row(verticalAlignment=androidx.compose.ui.Alignment.CenterVertically) { Text("Enable overlay",Modifier.weight(1f)); Switch(turbo,{turbo=it}) }
         LazyVerticalGrid(columns=GridCells.Adaptive(150.dp), contentPadding=PaddingValues(top=12.dp), horizontalArrangement=Arrangement.spacedBy(12.dp), verticalArrangement=Arrangement.spacedBy(12.dp)) {
-            items(apps,key={it.packageName}) { app -> Card(Modifier.fillMaxWidth().clickable { selected=app }) { Column(Modifier.padding(16.dp)) { Text(app.loadLabel(context.packageManager).toString(),style=MaterialTheme.typography.titleMedium); Text("Tap to launch",style=MaterialTheme.typography.bodySmall) } } }
+            items(apps,key={it.info.packageName}) { entry -> val app = entry.info; Card(Modifier.fillMaxWidth().clickable { selected=app }) { Column(Modifier.padding(16.dp)) { Text(entry.label,style=MaterialTheme.typography.titleMedium); Text("Tap to launch",style=MaterialTheme.typography.bodySmall) } } }
         }
     }
     selected?.let { app ->

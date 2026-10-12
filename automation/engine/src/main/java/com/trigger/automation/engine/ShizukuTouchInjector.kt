@@ -18,8 +18,10 @@ data class PointerState(val pointerId: Int, var x: Float, var y: Float, val down
 /** Thread-safe pointer lifecycle; each emitted event has consistent pointer arrays and timing. */
 class ShizukuTouchInjector(
     private val sink: InputEventSink = installedSink ?: DisconnectedInputEventSink,
-    private val executor: Executor = Executors.newSingleThreadExecutor()
+    private val executor: Executor? = null
 ) : AutoCloseable {
+    private val ownedExecutor = if (executor == null) Executors.newSingleThreadExecutor() else null
+    private val dragExecutor: Executor = executor ?: ownedExecutor!!
     private val pointers = LinkedHashMap<Int, PointerState>()
     private var gestureDownTime = 0L
     private var closed = false
@@ -68,22 +70,25 @@ class ShizukuTouchInjector(
         return down && up
     }
 
-    fun injectDrag(pointerId: Int, startX: Float, startY: Float, endX: Float, endY: Float, durationMs: Long, frameIntervalMs: Long = 8): Boolean {
+    fun injectDrag(pointerId: Int, startX: Float, startY: Float, endX: Float, endY: Float, durationMs: Long, frameIntervalMs: Long = 8, onComplete: () -> Unit = {}): Boolean {
         if (!injectTouchDown(pointerId,startX,startY)) return false
         val start=SystemClockCompat.uptimeMillis(); val duration=durationMs.coerceAtLeast(1)
         // Frame scheduling is asynchronous; callers may invoke injectMove themselves for custom pacing.
-        executor.execute {
+        try { dragExecutor.execute {
             try {
                 var elapsed=0L
                 while (elapsed < duration) {
                     elapsed=minOf(duration,elapsed+frameIntervalMs.coerceAtLeast(1))
                     val f=elapsed.toFloat()/duration
-                    injectMove(pointerId,startX+(endX-startX)*f,startY+(endY-startY)*f)
+                    if (!injectMove(pointerId,startX+(endX-startX)*f,startY+(endY-startY)*f)) break
                     val wait=(start+elapsed-SystemClockCompat.uptimeMillis()).coerceAtLeast(0)
                     if(wait>0) Thread.sleep(wait)
                 }
             } catch (_: InterruptedException) { Thread.currentThread().interrupt() }
-            finally { injectTouchUp(pointerId,endX,endY) }
+            finally { try { injectTouchUp(pointerId,endX,endY) } finally { onComplete() } }
+        } } catch (_: java.util.concurrent.RejectedExecutionException) {
+            try { injectTouchUp(pointerId,endX,endY) } finally { onComplete() }
+            return false
         }
         return true
     }
@@ -98,6 +103,7 @@ class ShizukuTouchInjector(
     }
 
     @Synchronized override fun close() { if(closed) return; closed=true
+        ownedExecutor?.shutdownNow()
         while(pointers.isNotEmpty()) { val id=pointers.keys.last(); dispatchLocked(if(pointers.size==1) MotionEvent.ACTION_UP else MotionEvent.ACTION_POINTER_UP or ((pointers.size-1) shl MotionEvent.ACTION_POINTER_INDEX_SHIFT),SystemClockCompat.uptimeMillis()); pointers.remove(id) }
     }
 }

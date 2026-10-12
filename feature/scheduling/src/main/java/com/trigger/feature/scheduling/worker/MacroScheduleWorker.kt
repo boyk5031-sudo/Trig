@@ -23,14 +23,15 @@ class MacroScheduleWorker(context:Context,params:WorkerParameters):CoroutineWork
             var tries=0
             while(sink.connection.state!=com.trigger.automation.engine.ShizukuServiceConnection.State.CONNECTED && tries++<30 && currentCoroutineContext().isActive) delay(500)
             if(sink.connection.state!=com.trigger.automation.engine.ShizukuServiceConnection.State.CONNECTED) return Result.retry()
-            val injector=ShizukuTouchInjector(sink)
+            return ShizukuTouchInjector(sink).use { injector ->
             val engine=MacroExecutionEngine(applicationContext,injector,CoordinateTransformer(applicationContext))
             val job=engine.executeMacro(macro,CoroutineScope(currentCoroutineContext()))
             job.join()
-            return when(engine.state.value.status) {
+            when(engine.state.value.status) {
                 com.trigger.automation.engine.MacroRunStatus.COMPLETED -> Result.success()
                 com.trigger.automation.engine.MacroRunStatus.CANCELLED -> Result.failure()
                 else -> Result.retry()
+            }
             }
         } finally { sink.close() }
     }
